@@ -21,7 +21,10 @@ jobs:
     - name: Install Pulumi
       uses: pulumi/actions@v3
       with:
+        command: up
         version: 3.x
+        work-dir: ./
+        comment-on-pr: false
 
     - name: Install dependencies
       run: pip install pulumi pulumi-aws
