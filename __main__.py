@@ -42,7 +42,7 @@ web = aws.ec2.Instance("web",
     subnet_id=subnets.ids[0],  # Specify the first subnet in the default VPC
     vpc_security_group_ids=[security_group.id],
     tags={
-        "Name": "pulumiec2",
+        "Name": "pulumiEc2",
     })
 
 # Export the resulting instance's public IP address and DNS name
