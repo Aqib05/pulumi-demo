@@ -31,12 +31,7 @@ role_policy_attachments = [
         role=eks_role.id)
 ]
 
-# Create the EKS cluster
-eks_cluster = eks.Cluster("eksCluster",
-    role_arn=eks_role.arn,
-    vpc_config={
-        "subnet_ids": vpc.public_subnet_ids
-    })
+ # Create an EKS cluster with the default configuration.
+cluster = aws.ecs.Cluster("my-cluster")
 
-# Export the kubeconfig for the cluster
-pulumi.export("kubeconfig", eks_cluster.kubeconfig)
+pulumi.export("cluster_name", cluster.name)
