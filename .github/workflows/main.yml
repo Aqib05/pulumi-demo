@@ -70,6 +70,7 @@ jobs:
       - name: Run Pulumi up to create EKS cluster
         run: |
           cd iac/pulumi
+          PULUMI_K8S_DELETE_UNREACHABLE=true pulumi up --yes
           pulumi up --yes
 
 
@@ -81,6 +82,7 @@ jobs:
       - name: Run Pulumi up
         run: |
           cd iac/pulumi  # Ensure you are in the directory with your Pulumi files
+          PULUMI_K8S_DELETE_UNREACHABLE=true pulumi up --yes
           pulumi up --yes
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
