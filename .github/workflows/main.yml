@@ -43,7 +43,7 @@ jobs:
           managed-session-policies: |
             arn:aws:iam::aws:policy/eks_full_access
             arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: us-east-1
 
       - name: Install Pulumi CLI
         run: |
