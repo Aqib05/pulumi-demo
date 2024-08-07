@@ -60,10 +60,6 @@ jobs:
           cd iac/pulumi  # Navigate to the directory with your Pulumi files
           pulumi stack select dev  # Select the Pulumi stack (dev in this case)
 
-      - name: Pulumi refresh
-        run: |
-          source venv/bin/activate
-          pulumi refresh --yes --stack dev --cwd ./
 
       - name: Run Pulumi preview
         run: |
