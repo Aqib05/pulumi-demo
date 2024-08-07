@@ -60,6 +60,16 @@ jobs:
           cd iac/pulumi  # Navigate to the directory with your Pulumi files
           pulumi stack select dev  # Select the Pulumi stack (dev in this case)
 
+      - name: Initialize Pulumi stack
+        run: |
+          cd iac/pulumi
+          pulumi stack init dev || pulumi stack select dev
+
+      - name: Run Pulumi up to create EKS cluster
+        run: |
+          cd iac/pulumi
+          pulumi up --yes
+
 
       - name: Run Pulumi preview
         run: |
@@ -70,6 +80,9 @@ jobs:
         run: |
           cd iac/pulumi  # Ensure you are in the directory with your Pulumi files
           pulumi up --yes
+
+      - name: Notify deployment success
+        run: echo "Deployment successful"
 
       - name: Notify deployment success
         run: echo "Deployment successful"
