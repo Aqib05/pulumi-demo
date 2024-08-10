@@ -43,6 +43,11 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Initialize Pulumi stack
+        run: |
+          cd iac
+          pulumi stack select dev
+
       - name: Pulumi Preview
         run: |
           cd iac
