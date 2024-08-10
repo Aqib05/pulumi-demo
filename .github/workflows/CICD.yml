@@ -47,7 +47,7 @@ jobs:
         run: |
           cd iac
           pulumi stack select dev
-          pulumi preview --yes
+          pulumi preview
           pulumi up --yes
           pulumi destroy --yes
 
