@@ -18,13 +18,16 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
+          cd iac
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Install Pulumi
-        run: curl -fsSL https://get.pulumi.com | sh
+        run: |
+          cd iac
+          curl -fsSL https://get.pulumi.com | sh
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -34,7 +37,9 @@ jobs:
           aws-region: ap-south-1
 
       - name: Login to Pulumi
-        run: pulumi login
+        run: |
+          cd iac
+          pulumi login
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
