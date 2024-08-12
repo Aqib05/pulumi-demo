@@ -47,16 +47,19 @@ jobs:
 
       - name: Select Pulumi stack
         run: |
+          cd iac
           source venv/bin/activate
           pulumi stack select dev
 
       - name: Pulumi Preview
         run: |
+          cd iac
           source venv/bin/activate
           pulumi preview
 
       - name: Pulumi Up
         run: |
+          cd iac
           source venv/bin/activate
           pulumi up --yes
 
