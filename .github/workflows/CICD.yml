@@ -1,12 +1,12 @@
-name: Pulumi CI/CD
+name: Create EKS Cluster
 
 on:
   push:
     branches:
-      - develop
+      - develop  # Change this to your branch if needed
 
 jobs:
-  pulumi:
+  create-cluster:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,6 +20,7 @@ jobs:
 
       - name: Set up Python virtual environment
         run: |
+          cd iac
           python -m venv venv
           ls -la venv  # Debugging step to check if the venv directory was created
           source venv/bin/activate
@@ -28,6 +29,7 @@ jobs:
 
       - name: Install Pulumi
         run: |
+          cd iac
           source venv/bin/activate
           curl -fsSL https://get.pulumi.com | sh
           export PATH=$PATH:$HOME/.pulumi/bin
@@ -41,6 +43,7 @@ jobs:
 
       - name: Login to Pulumi
         run: |
+          cd iac
           source venv/bin/activate
           pulumi login
         env:
@@ -60,9 +63,8 @@ jobs:
 
       - name: Pulumi Up
         run: |
-          cd iac
           source venv/bin/activate
           pulumi up --yes
 
       - name: Notify deployment success
-        run: echo "Deployment successful"
+        run: echo "EKS cluster created successfully"
