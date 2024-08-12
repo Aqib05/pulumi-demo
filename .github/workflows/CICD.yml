@@ -1,12 +1,12 @@
-name: Create EKS Cluster
+name: Pulumi CI/CD
 
 on:
   push:
     branches:
-      - develop  # Change this to your branch if needed
+      - develop
 
 jobs:
-  create-cluster:
+  pulumi:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,21 +18,13 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Set up Python virtual environment
+      - name: Install dependencies
         run: |
-          cd iac
-          python -m venv venv
-          ls -la venv  # Debugging step to check if the venv directory was created
-          source venv/bin/activate
           python -m pip install --upgrade pip
-          pip install -r iac/requirements.txt
+          pip install -r requirements.txt
 
       - name: Install Pulumi
-        run: |
-          cd iac
-          source venv/bin/activate
-          curl -fsSL https://get.pulumi.com | sh
-          export PATH=$PATH:$HOME/.pulumi/bin
+        run: curl -fsSL https://get.pulumi.com | sh
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -42,29 +34,19 @@ jobs:
           aws-region: ap-south-1
 
       - name: Login to Pulumi
-        run: |
-          cd iac
-          source venv/bin/activate
-          pulumi login
+        run: pulumi login
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-
-      - name: Select Pulumi stack
-        run: |
-          cd iac
-          source venv/bin/activate
-          pulumi stack select dev
 
       - name: Pulumi Preview
         run: |
           cd iac
-          source venv/bin/activate
           pulumi preview
 
-      - name: Pulumi Up
+      - name: Pulumi Update
         run: |
-          source venv/bin/activate
+          cd iac
           pulumi up --yes
 
       - name: Notify deployment success
-        run: echo "EKS cluster created successfully"
+        run: echo "Deployment successful"
