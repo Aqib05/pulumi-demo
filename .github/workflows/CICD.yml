@@ -21,8 +21,11 @@ jobs:
       - name: Install dependencies
         run: |
           cd iac
+          python -m venv venv
+          ls -la venv  # Debugging step to check if the venv directory was created
+          source venv/bin/activate
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r iac/requirements.txt
 
       - name: Install Pulumi
         run: curl -fsSL https://get.pulumi.com | sh
