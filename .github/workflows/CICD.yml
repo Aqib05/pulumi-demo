@@ -42,11 +42,13 @@ jobs:
       - name: Pulumi Preview
         run: |
           cd iac
+          pulumi stack select dev
           pulumi preview
 
       - name: Pulumi Update
         run: |
           cd iac
+          pulumi stack select dev
           pulumi up --yes
 
       - name: Notify deployment success
