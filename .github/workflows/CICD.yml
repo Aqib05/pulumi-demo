@@ -25,7 +25,7 @@ jobs:
           ls -la venv  # Debugging step to check if the venv directory was created
           source venv/bin/activate
           python -m pip install --upgrade pip
-          pip install -r iac/requirements.txt
+          pip install -r requirements.txt  # Corrected path, since we're already in the iac directory
 
       - name: Install Pulumi
         run: curl -fsSL https://get.pulumi.com | sh
