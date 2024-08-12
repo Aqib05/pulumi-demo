@@ -3,7 +3,7 @@ name: Pulumi CI/CD
 on:
   push:
     branches:
-      - develop
+      - test
 
 jobs:
   pulumi:
