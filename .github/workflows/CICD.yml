@@ -28,6 +28,7 @@ jobs:
         run: |
           cd iac
           curl -fsSL https://get.pulumi.com | sh
+          export PATH=$PATH:$HOME/.pulumi/bin
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
