@@ -1,84 +1,147 @@
 package myproject;
 
-import com.pulumi.Context;
 import com.pulumi.Pulumi;
-import com.pulumi.aws.eks.Cluster;
-import com.pulumi.aws.eks.ClusterArgs;
-import com.pulumi.aws.eks.inputs.ClusterVpcConfigArgs;
-import com.pulumi.aws.ec2.Vpc;
-import com.pulumi.aws.ec2.VpcArgs;
-import com.pulumi.aws.ec2.Subnet;
-import com.pulumi.aws.ec2.SubnetArgs;
+import com.pulumi.aws.iam.Group;
+import com.pulumi.aws.iam.GroupArgs;
+import com.pulumi.aws.iam.GroupMembership;
+import com.pulumi.aws.iam.GroupMembershipArgs;
+import com.pulumi.aws.iam.User;
+import com.pulumi.aws.iam.UserArgs;
+import com.pulumi.aws.iam.GroupPolicyAttachment;
+import com.pulumi.aws.iam.GroupPolicyAttachmentArgs;
+import com.pulumi.aws.iam.Policy;
+import com.pulumi.aws.iam.PolicyArgs;
 import com.pulumi.core.Output;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class App {
     public static void main(String[] args) {
-        Pulumi.run(App::createEKSCluster);
-    }
+        Pulumi.run(ctx -> {
+            // List of user names
+            List<String> userNames = Arrays.asList(
+                "UmmerShervani",
+                "ArunMathev",
+                "BijuS",
+                "EmilJoseph",
+                "VidyothSatesh",
+                "AbdullaSoopy",
+                "SunithaLakkadan",
+                "AjayMani",
+                "AkhilR",
+                "Akshay",
+                "AqibG"
+            );
 
-    public static void createEKSCluster(Context ctx) {
-        // Create a VPC for the EKS cluster
-        var vpc = new Vpc("eks-vpc", VpcArgs.builder()
-                .cidrBlock("10.0.0.0/16")
+            // Create IAM users
+            List<Output<String>> createdUsers = userNames.stream()
+                .map(userName -> new User(userName, UserArgs.builder()
+                    .name(userName)
+                    .build()).name())
+                .collect(Collectors.toList());
+
+            // Create IAM Groups with valid names
+            Group adminGroup = new Group("adminGroup", GroupArgs.builder().name("Admin").build());
+            Group readWriteGroup = new Group("readWriteGroup", GroupArgs.builder().name("Read-Write").build());
+            Group readOnlyGroup = new Group("readOnlyGroup", GroupArgs.builder().name("Read-Only").build());
+
+            // Separate users into groups
+            List<Output<String>> adminUsers = Arrays.asList(createdUsers.get(0), createdUsers.get(1));
+            List<Output<String>> readWriteUsers = Arrays.asList(createdUsers.get(4), createdUsers.get(5), createdUsers.get(6), createdUsers.get(10));
+            List<Output<String>> readOnlyUsers = Arrays.asList(createdUsers.get(2), createdUsers.get(3), createdUsers.get(7), createdUsers.get(8), createdUsers.get(9));
+
+            // Assign users to groups
+            new GroupMembership("adminGroupMembership", GroupMembershipArgs.builder()
+                .group(adminGroup.name())
+                .users(Output.all(adminUsers).applyValue(users -> users))
                 .build());
 
-        // Create subnets in the VPC
-        var subnet1 = new Subnet("subnet1", SubnetArgs.builder()
-                .vpcId(vpc.id())
-                .cidrBlock("10.0.1.0/24")
-                .availabilityZone("us-east-1a")
+            new GroupMembership("readWriteGroupMembership", GroupMembershipArgs.builder()
+                .group(readWriteGroup.name())
+                .users(Output.all(readWriteUsers).applyValue(users -> users))
                 .build());
 
-        var subnet2 = new Subnet("subnet2", SubnetArgs.builder()
-                .vpcId(vpc.id())
-                .cidrBlock("10.0.2.0/24")
-                .availabilityZone("us-east-1b")
+            new GroupMembership("readOnlyGroupMembership", GroupMembershipArgs.builder()
+                .group(readOnlyGroup.name())
+                .users(Output.all(readOnlyUsers).applyValue(users -> users))
                 .build());
 
-        // Convert List<Output<String>> to Output<List<String>>
-        var subnetIds = Output.all(subnet1.id(), subnet2.id());
-
-        // Create the EKS cluster
-        var eksCluster = new Cluster("eks-cluster", ClusterArgs.builder()
-                .vpcConfig(ClusterVpcConfigArgs.builder()
-                        .subnetIds(subnetIds)
-                        .build())
+            // Attach the existing AdministratorAccess policy to the Admin group
+            new GroupPolicyAttachment("adminPolicyAttachment", GroupPolicyAttachmentArgs.builder()
+                .group(adminGroup.name())
+                .policyArn("arn:aws:iam::aws:policy/AdministratorAccess")
                 .build());
 
-        // Construct kubeconfig
-        var kubeconfig = Output
-                .tuple(eksCluster.endpoint(), eksCluster.certificateAuthority().apply(ca -> ca.data()), eksCluster.name())
-                .apply(t -> String.format(
-                        "apiVersion: v1\n" +
-                                "clusters:\n" +
-                                "- cluster:\n" +
-                                "    server: %s\n" +
-                                "    certificate-authority-data: %s\n" +
-                                "  name: %s\n" +
-                                "contexts:\n" +
-                                "- context:\n" +
-                                "    cluster: %s\n" +
-                                "    user: aws\n" +
-                                "  name: %s\n" +
-                                "current-context: %s\n" +
-                                "kind: Config\n" +
-                                "preferences: {}\n" +
-                                "users:\n" +
-                                "- name: aws\n" +
-                                "  user:\n" +
-                                "    exec:\n" +
-                                "      apiVersion: client.authentication.k8s.io/v1alpha1\n" +
-                                "      command: aws-iam-authenticator\n" +
-                                "      args:\n" +
-                                "        - \"token\"\n" +
-                                "        - \"-i\"\n" +
-                                "        - \"%s\"\n" +
-                                "      env: null\n",
-                        t.t1, t.t2, t.t3, t.t3, t.t3, t.t3, t.t3));
+            // Create Read-Write Policy (EKS Full Access)
+            Policy readWritePolicy = new Policy("readWritePolicy", PolicyArgs.builder()
+                .name("CustomEKSFullAccess")
+                .description("Custom policy for EKS full access")
+                .policy("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"eks:*\"],\"Resource\":\"*\"}]}")
+                .build());
 
-        // Export the kubeconfig
-        ctx.export("kubeconfig", kubeconfig);
+            // Create Read-Only Policy (EKS Read-Only Access)
+            Policy readOnlyPolicy = new Policy("readOnlyPolicy", PolicyArgs.builder()
+                .name("CustomEKSReadOnlyAccess")
+                .description("Custom policy for EKS read-only access")
+                .policy("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"eks:DescribeCluster\"],\"Resource\":\"*\"}]}")
+                .build());
+
+            // Attach custom read-write policy to the Read-Write group
+            new GroupPolicyAttachment("readWritePolicyAttachment", GroupPolicyAttachmentArgs.builder()
+                .group(readWriteGroup.name())
+                .policyArn(readWritePolicy.arn())
+                .build());
+
+            // Attach existing read-write policies to the Read-Write group
+            List<String> readWritePolicies = Arrays.asList(
+                "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+                "arn:aws:iam::aws:policy/AmazonVPCFullAccess",
+                "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess",
+                "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+                "arn:aws:iam::aws:policy/AmazonRDSFullAccess",
+                "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+                "arn:aws:iam::aws:policy/AWSLambda_FullAccess",
+                "arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess",
+                "arn:aws:iam::aws:policy/CloudWatchFullAccess"
+            );
+
+            readWritePolicies.forEach(policyArn -> new GroupPolicyAttachment("readWritePolicyAttachment" + policyArn.hashCode(),
+                GroupPolicyAttachmentArgs.builder()
+                    .group(readWriteGroup.name())
+                    .policyArn(policyArn)
+                    .build()));
+
+            // Attach custom read-only policy to the Read-Only group
+            new GroupPolicyAttachment("readOnlyPolicyAttachment", GroupPolicyAttachmentArgs.builder()
+                .group(readOnlyGroup.name())
+                .policyArn(readOnlyPolicy.arn())
+                .build());
+
+            // Attach existing read-only policies to the Read-Only group
+            List<String> readOnlyPolicies = Arrays.asList(
+                "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess",
+                "arn:aws:iam::aws:policy/AmazonVPCReadOnlyAccess",
+                "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+                "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+                "arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess",
+                "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess",
+                "arn:aws:iam::aws:policy/AWSLambda_ReadOnlyAccess",
+                "arn:aws:iam::aws:policy/ElasticLoadBalancingReadOnlyAccess",
+                "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
+            );
+
+            readOnlyPolicies.forEach(policyArn -> new GroupPolicyAttachment("readOnlyPolicyAttachment" + policyArn.hashCode(),
+                GroupPolicyAttachmentArgs.builder()
+                    .group(readOnlyGroup.name())
+                    .policyArn(policyArn)
+                    .build()));
+
+            // Export group names
+            ctx.export("AdminGroup", adminGroup.name());
+            ctx.export("ReadWriteGroup", readWriteGroup.name());
+            ctx.export("ReadOnlyGroup", readOnlyGroup.name());
+        });
     }
 }
