@@ -1,111 +1,152 @@
 import pulumi
-from pulumi_aws import eks, ec2, iam
+import pulumi_aws as aws
+import pulumi_kubernetes as k8s
+import pulumi_eks as eks
 
 # Create a VPC
-vpc = ec2.Vpc("my-vpc",
-    cidr_block="10.0.0.0/16",
+vpc = aws.ec2.Vpc(
+    resource_name='my-vpc',
+    cidr_block='10.0.0.0/16',
+    enable_dns_support=True,
     enable_dns_hostnames=True,
-    tags={"Name": "pulumi-eks-vpc"}
+    tags={
+        'Name': 'my-vpc',
+    }
 )
 
-# Create public subnets for EKS
-public_subnet1 = ec2.Subnet("public-subnet-1",
+# Create an Internet Gateway
+internet_gateway = aws.ec2.InternetGateway(
+    resource_name='my-igw',
     vpc_id=vpc.id,
-    cidr_block="10.0.1.0/24",
-    map_public_ip_on_launch=True,
-    availability_zone="us-west-2a",
-    tags={"Name": "pulumi-eks-public-subnet-1"}
+    tags={
+        'Name': 'my-igw',
+    }
 )
 
-public_subnet2 = ec2.Subnet("public-subnet-2",
+# Create Public Subnets
+public_subnet_1 = aws.ec2.Subnet(
+    resource_name='my-public-subnet-1',
     vpc_id=vpc.id,
-    cidr_block="10.0.2.0/24",
+    cidr_block='10.0.1.0/24',
     map_public_ip_on_launch=True,
-    availability_zone="us-west-2b",
-    tags={"Name": "pulumi-eks-public-subnet-2"}
+    availability_zone='ap-south-1a',
+    tags={
+        'Name': 'my-public-subnet-1',
+    }
 )
 
-# Create an EKS Role
-eks_role = iam.Role("eksRole",
-    assume_role_policy="""{
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Principal": {
-            "Service": "eks.amazonaws.com"
-          },
-          "Action": "sts:AssumeRole"
-        }
-      ]
-    }"""
+public_subnet_2 = aws.ec2.Subnet(
+    resource_name='my-public-subnet-2',
+    vpc_id=vpc.id,
+    cidr_block='10.0.2.0/24',
+    map_public_ip_on_launch=True,
+    availability_zone='ap-south-1b',
+    tags={
+        'Name': 'my-public-subnet-2',
+    }
 )
 
-# Attach the necessary policies to the EKS role
-iam.RolePolicyAttachment("eks-cluster-policy",
-    role=eks_role.name,
-    policy_arn="arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+# Create Private Subnets
+private_subnet_1 = aws.ec2.Subnet(
+    resource_name='my-private-subnet-1',
+    vpc_id=vpc.id,
+    cidr_block='10.0.3.0/24',
+    map_public_ip_on_launch=False,
+    availability_zone='ap-south-1a',
+    tags={
+        'Name': 'my-private-subnet-1',
+    }
 )
 
-iam.RolePolicyAttachment("eks-service-policy",
-    role=eks_role.name,
-    policy_arn="arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
+private_subnet_2 = aws.ec2.Subnet(
+    resource_name='my-private-subnet-2',
+    vpc_id=vpc.id,
+    cidr_block='10.0.4.0/24',
+    map_public_ip_on_launch=False,
+    availability_zone='ap-south-1b',
+    tags={
+        'Name': 'my-private-subnet-2',
+    }
 )
 
-# Create the EKS cluster
-eks_cluster = eks.Cluster("my-eks-cluster",
-    role_arn=eks_role.arn,
-    vpc_config=eks.ClusterVpcConfigArgs(
-        subnet_ids=[public_subnet1.id, public_subnet2.id]
-    ),
-    tags={"Name": "pulumi-eks-cluster"}
+# Create a Public Route Table
+public_route_table = aws.ec2.RouteTable(
+    resource_name='my-public-route-table',
+    vpc_id=vpc.id,
+    routes=[
+        aws.ec2.RouteTableRouteArgs(
+            cidr_block='0.0.0.0/0',
+            gateway_id=internet_gateway.id,
+        )
+    ],
+    tags={
+        'Name': 'my-public-route-table',
+    }
 )
 
-# Create a node group role
-node_group_role = iam.Role("nodeGroupRole",
-    assume_role_policy="""{
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Principal": {
-            "Service": "ec2.amazonaws.com"
-          },
-          "Action": "sts:AssumeRole"
-        }
-      ]
-    }"""
+# Associate the Public Route Table with Public Subnets
+public_route_table_association_1 = aws.ec2.RouteTableAssociation(
+    resource_name='my-public-route-table-association-1',
+    subnet_id=public_subnet_1.id,
+    route_table_id=public_route_table.id,
 )
 
-# Attach necessary policies to the node group role
-iam.RolePolicyAttachment("node-group-policy",
-    role=node_group_role.name,
-    policy_arn="arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+public_route_table_association_2 = aws.ec2.RouteTableAssociation(
+    resource_name='my-public-route-table-association-2',
+    subnet_id=public_subnet_2.id,
+    route_table_id=public_route_table.id,
 )
 
-iam.RolePolicyAttachment("cni-policy",
-    role=node_group_role.name,
-    policy_arn="arn:aws:iam::aws:policy/AmazonEKSCNIPolicy"
+# Create a NAT Gateway for Private Subnets
+eip = aws.ec2.Eip('my-eip', vpc=True)
+
+nat_gateway = aws.ec2.NatGateway(
+    resource_name='my-nat-gateway',
+    subnet_id=public_subnet_1.id,
+    allocation_id=eip.id,
+    tags={
+        'Name': 'my-nat-gateway',
+    }
 )
 
-iam.RolePolicyAttachment("ec2-container-registry-policy",
-    role=node_group_role.name,
-    policy_arn="arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+# Create a Private Route Table
+private_route_table = aws.ec2.RouteTable(
+    resource_name='my-private-route-table',
+    vpc_id=vpc.id,
+    routes=[
+        aws.ec2.RouteTableRouteArgs(
+            cidr_block='0.0.0.0/0',
+            nat_gateway_id=nat_gateway.id,
+        )
+    ],
+    tags={
+        'Name': 'my-private-route-table',
+    }
 )
 
-# Create a managed node group
-node_group = eks.NodeGroup("my-node-group",
-    cluster_name=eks_cluster.name,
-    node_group_name="my-node-group",
-    node_role_arn=node_group_role.arn,
-    subnet_ids=[public_subnet1.id, public_subnet2.id],
-    scaling_config=eks.NodeGroupScalingConfigArgs(
-        desired_size=2,
-        max_size=3,
-        min_size=1
-    ),
-    tags={"Name": "pulumi-eks-node-group"}
+# Associate the Private Route Table with Private Subnets
+private_route_table_association_1 = aws.ec2.RouteTableAssociation(
+    resource_name='my-private-route-table-association-1',
+    subnet_id=private_subnet_1.id,
+    route_table_id=private_route_table.id,
 )
 
-# Export the cluster's kubeconfig
-pulumi.export("kubeconfig", eks_cluster.kubeconfig)
+private_route_table_association_2 = aws.ec2.RouteTableAssociation(
+    resource_name='my-private-route-table-association-2',
+    subnet_id=private_subnet_2.id,
+    route_table_id=private_route_table.id,
+)
+
+# Create an EKS Cluster
+eks_cluster = eks.Cluster('my-cluster',
+    vpc_id=vpc.id,
+    public_subnet_ids=[public_subnet_1.id, public_subnet_2.id],
+    private_subnet_ids=[private_subnet_1.id, private_subnet_2.id],
+    instance_type='t2.medium',
+    desired_capacity=2,
+    min_size=1,
+    max_size=3
+)
+
+# Export the kubeconfig to access the cluster
+pulumi.export('kubeconfig', eks_cluster.kubeconfig)
