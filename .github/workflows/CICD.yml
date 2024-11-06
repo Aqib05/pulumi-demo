@@ -3,8 +3,12 @@ name: Pulumi CI/CD
 on:
   push:
     branches:
-      - develop
-
+      - 'main'
+      - 'develop'
+  workflow_dispatch:
+concurrency:
+  group: "${{ github.ref }}"
+  cancel-in-progress: true  
 jobs:
   pulumi:
     runs-on: ubuntu-latest
@@ -49,7 +53,7 @@ jobs:
         run: |
           cd iac
           pulumi stack select dev
-          pulumi up --yes
+          pulumi destroy --yes
 
       - name: Notify deployment success
         run: echo "Deployment successful"
