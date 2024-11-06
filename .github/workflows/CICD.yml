@@ -53,7 +53,7 @@ jobs:
         run: |
           cd iac
           pulumi stack select dev
-          pulumi destroy --yes
+          pulumi up --yes
 
       - name: Notify deployment success
         run: echo "Deployment successful"
