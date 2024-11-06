@@ -2,151 +2,215 @@ import pulumi
 import pulumi_aws as aws
 import pulumi_kubernetes as k8s
 import pulumi_eks as eks
+from pulumi_aws import ec2, eks, iam
 
-# Create a VPC
-vpc = aws.ec2.Vpc(
-    resource_name='my-vpc',
-    cidr_block='10.0.0.0/16',
-    enable_dns_support=True,
+# VPC Configuration Variables
+vpc_cidr = "10.0.0.0/16"
+region = "us-east-2"
+public_subnet_cidrs = ["10.0.1.0/24", "10.0.3.0/24"]
+private_subnet_cidrs = ["10.0.2.0/24", "10.0.4.0/24"]
+
+# Cluster and Node Group Configuration Variables
+cluster_name = "ai-engineering-safetylab-eks"
+node_group_name = "ai-engineering-eks-ng-public"
+instance_type = "t3.medium"
+k8s_version = "1.24"
+ami_type = "AL2_x86_64"
+disk_size = 20
+capacity_type = "ON_DEMAND"
+desired_size = 2
+min_size = 1
+max_size = 3
+
+# Create VPC
+vpc = ec2.Vpc("vpc",
+    cidr_block=vpc_cidr,
     enable_dns_hostnames=True,
-    tags={
-        'Name': 'my-vpc',
-    }
+    enable_dns_support=True,
+    tags={"Name": f"{cluster_name}-vpc"}
 )
 
-# Create an Internet Gateway
-internet_gateway = aws.ec2.InternetGateway(
-    resource_name='my-igw',
+# Internet Gateway for Public Subnets
+igw = ec2.InternetGateway("internet-gateway",
     vpc_id=vpc.id,
-    tags={
-        'Name': 'my-igw',
-    }
+    tags={"Name": f"{cluster_name}-igw"}
 )
 
-# Create Public Subnets
-public_subnet_1 = aws.ec2.Subnet(
-    resource_name='my-public-subnet-1',
-    vpc_id=vpc.id,
-    cidr_block='10.0.1.0/24',
-    map_public_ip_on_launch=True,
-    availability_zone='ap-south-1a',
-    tags={
-        'Name': 'my-public-subnet-1',
-    }
+# NAT Gateway and Elastic IP for Private Subnets
+eip = ec2.Eip("nat-gateway-eip", 
+    tags={"Name": f"{cluster_name}-nat-eip"}
 )
 
-public_subnet_2 = aws.ec2.Subnet(
-    resource_name='my-public-subnet-2',
-    vpc_id=vpc.id,
-    cidr_block='10.0.2.0/24',
-    map_public_ip_on_launch=True,
-    availability_zone='ap-south-1b',
-    tags={
-        'Name': 'my-public-subnet-2',
-    }
-)
-
-# Create Private Subnets
-private_subnet_1 = aws.ec2.Subnet(
-    resource_name='my-private-subnet-1',
-    vpc_id=vpc.id,
-    cidr_block='10.0.3.0/24',
-    map_public_ip_on_launch=False,
-    availability_zone='ap-south-1a',
-    tags={
-        'Name': 'my-private-subnet-1',
-    }
-)
-
-private_subnet_2 = aws.ec2.Subnet(
-    resource_name='my-private-subnet-2',
-    vpc_id=vpc.id,
-    cidr_block='10.0.4.0/24',
-    map_public_ip_on_launch=False,
-    availability_zone='ap-south-1b',
-    tags={
-        'Name': 'my-private-subnet-2',
-    }
-)
-
-# Create a Public Route Table
-public_route_table = aws.ec2.RouteTable(
-    resource_name='my-public-route-table',
-    vpc_id=vpc.id,
-    routes=[
-        aws.ec2.RouteTableRouteArgs(
-            cidr_block='0.0.0.0/0',
-            gateway_id=internet_gateway.id,
-        )
-    ],
-    tags={
-        'Name': 'my-public-route-table',
-    }
-)
-
-# Associate the Public Route Table with Public Subnets
-public_route_table_association_1 = aws.ec2.RouteTableAssociation(
-    resource_name='my-public-route-table-association-1',
-    subnet_id=public_subnet_1.id,
-    route_table_id=public_route_table.id,
-)
-
-public_route_table_association_2 = aws.ec2.RouteTableAssociation(
-    resource_name='my-public-route-table-association-2',
-    subnet_id=public_subnet_2.id,
-    route_table_id=public_route_table.id,
-)
-
-# Create a NAT Gateway for Private Subnets
-eip = aws.ec2.Eip('my-eip', vpc=True)
-
-nat_gateway = aws.ec2.NatGateway(
-    resource_name='my-nat-gateway',
-    subnet_id=public_subnet_1.id,
+nat_gateway = ec2.NatGateway("nat-gateway",
     allocation_id=eip.id,
-    tags={
-        'Name': 'my-nat-gateway',
-    }
+    subnet_id=public_subnet_cidrs[0],  # NAT Gateway in the first public subnet
+    tags={"Name": f"{cluster_name}-nat-gateway"}
 )
 
-# Create a Private Route Table
-private_route_table = aws.ec2.RouteTable(
-    resource_name='my-private-route-table',
+# Create Subnets (Public and Private)
+public_subnet_1 = ec2.Subnet("public-subnet-1",
     vpc_id=vpc.id,
-    routes=[
-        aws.ec2.RouteTableRouteArgs(
-            cidr_block='0.0.0.0/0',
-            nat_gateway_id=nat_gateway.id,
-        )
-    ],
-    tags={
-        'Name': 'my-private-route-table',
-    }
+    cidr_block=public_subnet_cidrs[0],
+    map_public_ip_on_launch=True,
+    availability_zone=f"{region}a",
+    tags={"Name": f"{cluster_name}-public-subnet-1"}
 )
 
-# Associate the Private Route Table with Private Subnets
-private_route_table_association_1 = aws.ec2.RouteTableAssociation(
-    resource_name='my-private-route-table-association-1',
+public_subnet_2 = ec2.Subnet("public-subnet-2",
+    vpc_id=vpc.id,
+    cidr_block=public_subnet_cidrs[1],
+    map_public_ip_on_launch=True,
+    availability_zone=f"{region}b",
+    tags={"Name": f"{cluster_name}-public-subnet-2"}
+)
+
+private_subnet_1 = ec2.Subnet("private-subnet-1",
+    vpc_id=vpc.id,
+    cidr_block=private_subnet_cidrs[0],
+    availability_zone=f"{region}a",
+    tags={"Name": f"{cluster_name}-private-subnet-1"}
+)
+
+private_subnet_2 = ec2.Subnet("private-subnet-2",
+    vpc_id=vpc.id,
+    cidr_block=private_subnet_cidrs[1],
+    availability_zone=f"{region}b",
+    tags={"Name": f"{cluster_name}-private-subnet-2"}
+)
+
+# Route Table for Public Subnets
+public_route_table = ec2.RouteTable("public-route-table",
+    vpc_id=vpc.id,
+    routes=[ec2.RouteTableRouteArgs(
+        cidr_block="0.0.0.0/0",
+        gateway_id=igw.id
+    )],
+    tags={"Name": f"{cluster_name}-public-rt"}
+)
+
+# Route Table for Private Subnets
+private_route_table = ec2.RouteTable("private-route-table",
+    vpc_id=vpc.id,
+    routes=[ec2.RouteTableRouteArgs(
+        cidr_block="0.0.0.0/0",
+        nat_gateway_id=nat_gateway.id
+    )],
+    tags={"Name": f"{cluster_name}-private-rt"}
+)
+
+# Associate Route Tables with Subnets
+ec2.RouteTableAssociation("public-subnet-1-rt-association",
+    subnet_id=public_subnet_1.id,
+    route_table_id=public_route_table.id
+)
+
+ec2.RouteTableAssociation("public-subnet-2-rt-association",
+    subnet_id=public_subnet_2.id,
+    route_table_id=public_route_table.id
+)
+
+ec2.RouteTableAssociation("private-subnet-1-rt-association",
     subnet_id=private_subnet_1.id,
-    route_table_id=private_route_table.id,
+    route_table_id=private_route_table.id
 )
 
-private_route_table_association_2 = aws.ec2.RouteTableAssociation(
-    resource_name='my-private-route-table-association-2',
+ec2.RouteTableAssociation("private-subnet-2-rt-association",
     subnet_id=private_subnet_2.id,
-    route_table_id=private_route_table.id,
+    route_table_id=private_route_table.id
 )
 
-# Create an EKS Cluster
-eks_cluster = eks.Cluster('my-cluster',
-    vpc_id=vpc.id,
-    public_subnet_ids=[public_subnet_1.id, public_subnet_2.id],
-    private_subnet_ids=[private_subnet_1.id, private_subnet_2.id],
-    instance_type='t2.medium',
-    desired_capacity=2,
-    min_size=1,
-    max_size=3
+# Create EKS Role
+eks_role = iam.Role("eksRole",
+    assume_role_policy="""{
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "eks.amazonaws.com"
+          },
+          "Action": "sts:AssumeRole"
+        }
+      ]
+    }"""
 )
 
-# Export the kubeconfig to access the cluster
-pulumi.export('kubeconfig', eks_cluster.kubeconfig)
+# Attach Policies to EKS Role
+iam.RolePolicyAttachment("eks-cluster-policy",
+    role=eks_role.name,
+    policy_arn="arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+)
+
+iam.RolePolicyAttachment("eks-service-policy",
+    role=eks_role.name,
+    policy_arn="arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
+)
+
+# Create EKS Cluster
+eks_cluster = eks.Cluster(cluster_name,
+    role_arn=eks_role.arn,
+    version=k8s_version,
+    vpc_config=eks.ClusterVpcConfigArgs(
+        subnet_ids=[public_subnet_1.id, public_subnet_2.id, private_subnet_1.id, private_subnet_2.id],
+        endpoint_public_access=True,
+        public_access_cidrs=["0.0.0.0/0"]
+    ),
+    tags={"Name": cluster_name}
+)
+
+# Node Group Role
+node_group_role = iam.Role("nodeGroupRole",
+    assume_role_policy="""{
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "ec2.amazonaws.com"
+          },
+          "Action": "sts:AssumeRole"
+        }
+      ]
+    }"""
+)
+
+# Attach Policies to Node Group Role
+iam.RolePolicyAttachment("node-group-policy",
+    role=node_group_role.name,
+    policy_arn="arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+)
+
+iam.RolePolicyAttachment("cni-policy",
+    role=node_group_role.name,
+    policy_arn="arn:aws:iam::aws:policy/AmazonEKSCNIPolicy"
+)
+
+iam.RolePolicyAttachment("ec2-container-registry-policy",
+    role=node_group_role.name,
+    policy_arn="arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+)
+
+# Create Node Group
+node_group = eks.NodeGroup(node_group_name,
+    cluster_name=eks_cluster.name,
+    node_group_name=node_group_name,
+    node_role_arn=node_group_role.arn,
+    subnet_ids=[public_subnet_1.id, public_subnet_2.id, private_subnet_1.id, private_subnet_2.id],
+    scaling_config=eks.NodeGroupScalingConfigArgs(
+        desired_size=desired_size,
+        max_size=max_size,
+        min_size=min_size
+    ),
+    instance_types=[instance_type],
+    ami_type=ami_type,
+    disk_size=disk_size,
+    capacity_type=capacity_type,
+    remote_access=eks.NodeGroupRemoteAccessArgs(
+        ec2_ssh_key="eks-pulumi-key",
+        source_security_group_ids=[eks_cluster.vpc_config.cluster_security_group]
+    ),
+    tags={"Name": node_group_name}
+)
+
+# Output the Cluster Kubeconfig
+pulumi.export("kubeconfig", eks_cluster.kubeconfig)
