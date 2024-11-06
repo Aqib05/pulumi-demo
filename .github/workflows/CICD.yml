@@ -20,16 +20,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
           cd iac
+          python -m venv venv
+          source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt  # Corrected path, since we're already in the iac directory
 
       - name: Install Pulumi
-        run: curl -fsSL https://get.pulumi.com | sh
+        uses: pulumi/actions-install-pulumi-cli@v3
+        with:
+          pulumi-version: 'latest'
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -50,6 +54,7 @@ jobs:
           pulumi preview
 
       - name: Pulumi Update
+        if: success() # Runs only if preview is successful
         run: |
           cd iac
           pulumi stack select dev
