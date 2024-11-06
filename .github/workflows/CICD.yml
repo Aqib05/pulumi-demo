@@ -3,8 +3,12 @@ name: Pulumi CI/CD
 on:
   push:
     branches:
-      - develop
-
+      - 'main'
+      - 'develop'
+  workflow_dispatch:
+concurrency:
+  group: "${{ github.ref }}"
+  cancel-in-progress: true  
 jobs:
   pulumi:
     runs-on: ubuntu-latest
