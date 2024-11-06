@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
@@ -31,9 +31,9 @@ jobs:
           pip install -r requirements.txt  # Corrected path, since we're already in the iac directory
 
       - name: Install Pulumi
-        uses: pulumi/actions-install-pulumi-cli@v3
-        with:
-          pulumi-version: 'latest'
+        run: curl -fsSL https://get.pulumi.com | sh
+        env:
+          PULUMI_VERSION: latest
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
